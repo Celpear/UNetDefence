@@ -1,0 +1,13 @@
+# UNetDefence - install with: pip install -e .
+# Default DB is SQLite (aiosqlite). For Postgres use UNETDEFENCE_DATABASE_URL.
+psycopg[binary,pool]>=3.1
+aiosqlite>=0.19
+pgvector>=0.2.0
+pydantic>=2.0
+pydantic-settings>=2.0
+httpx>=0.25
+python-json-logger>=2.0
+apscheduler>=3.10
+fastapi>=0.109
+uvicorn[standard]>=0.27
+maxminddb>=2.0

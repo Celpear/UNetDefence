@@ -1,0 +1,23 @@
+# Local env (secrets, machine-specific)
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+*.db
+unetdefence.db
+
+# Build / install artifacts
+*.egg-info/
+dist/
+build/
+eggs/
+
+# OS
+.DS_Store
+
+# Coverage (if tests added)
+.coverage
+htmlcov/

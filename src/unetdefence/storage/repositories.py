@@ -1,6 +1,7 @@
 """Repository layer: persist and query normalised events."""
 
 import json
+from typing import Any
 from uuid import UUID, uuid4
 
 from psycopg import AsyncConnection
@@ -19,6 +20,18 @@ from unetdefence.storage.connection import is_sqlite
 
 def _ensure_uuid(val: UUID | str) -> UUID:
     return val if isinstance(val, UUID) else UUID(str(val))
+
+
+def _safe_uuid(val: Any) -> UUID | None:
+    """Parse to UUID; return None if invalid (e.g. bad DB value or Zeek uid)."""
+    if val is None:
+        return None
+    if isinstance(val, UUID):
+        return val
+    try:
+        return UUID(str(val).strip())
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 async def insert_flow(conn: AsyncConnection, e: FlowEvent, device_id: UUID | None = None) -> UUID:
@@ -54,7 +67,7 @@ async def insert_flow(conn: AsyncConnection, e: FlowEvent, device_id: UUID | Non
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params)
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or (row_id if is_sqlite() else uuid4())
 
 
 async def insert_dns(conn: AsyncConnection, e: DnsEvent, device_id: UUID | None = None) -> UUID:
@@ -91,7 +104,7 @@ async def insert_dns(conn: AsyncConnection, e: DnsEvent, device_id: UUID | None 
             ),
         )
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or uuid4()
 
 
 async def insert_http(conn: AsyncConnection, e: HttpEvent, device_id: UUID | None = None) -> UUID:
@@ -106,7 +119,7 @@ async def insert_http(conn: AsyncConnection, e: HttpEvent, device_id: UUID | Non
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params)
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or (row_id if is_sqlite() else uuid4())
 
 
 async def insert_tls(conn: AsyncConnection, e: TlsEvent, device_id: UUID | None = None) -> UUID:
@@ -121,7 +134,7 @@ async def insert_tls(conn: AsyncConnection, e: TlsEvent, device_id: UUID | None 
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params)
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or (row_id if is_sqlite() else uuid4())
 
 
 async def insert_alert(conn: AsyncConnection, e: AlertEvent, device_id: UUID | None = None) -> UUID:
@@ -136,7 +149,7 @@ async def insert_alert(conn: AsyncConnection, e: AlertEvent, device_id: UUID | N
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params)
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or (row_id if is_sqlite() else uuid4())
 
 
 async def insert_router_event(conn: AsyncConnection, e: RouterEvent, device_id: UUID | None = None) -> UUID:
@@ -152,7 +165,7 @@ async def insert_router_event(conn: AsyncConnection, e: RouterEvent, device_id: 
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, params)
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or (row_id if is_sqlite() else uuid4())
 
 
 async def get_device_id_by_ip(conn: AsyncConnection, ip: str) -> UUID | None:
@@ -161,14 +174,14 @@ async def get_device_id_by_ip(conn: AsyncConnection, ip: str) -> UUID | None:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (ip,))
         row = await cur.fetchone()
-    return _ensure_uuid(row["id"]) if row else None
+    return _safe_uuid(row["id"]) if row else None
 
 
 async def get_device_id_by_mac(conn: AsyncConnection, mac: str) -> UUID | None:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute("SELECT id FROM devices WHERE mac_address = %s", (mac,))
         row = await cur.fetchone()
-    return _ensure_uuid(row["id"]) if row else None
+    return _safe_uuid(row["id"]) if row else None
 
 
 async def upsert_device(
@@ -217,7 +230,7 @@ async def upsert_device(
                 )
             row = await cur.fetchone()
             if row:
-                return _ensure_uuid(row["id"])
+                return _safe_uuid(row["id"]) or uuid4()
         if current_ip:
             sql = "SELECT id FROM devices WHERE current_ip = %s" if is_sqlite() else "SELECT id FROM devices WHERE current_ip = %s::inet"
             await cur.execute(sql, (current_ip,))
@@ -225,7 +238,7 @@ async def upsert_device(
             if row:
                 upd = "UPDATE devices SET last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id = %s" if is_sqlite() else "UPDATE devices SET last_seen_at = now(), updated_at = now() WHERE id = %s"
                 await cur.execute(upd, (row["id"],))
-                return _ensure_uuid(row["id"])
+                return _safe_uuid(row["id"]) or uuid4()
         if is_sqlite():
             dev_id = str(uuid4())
             await cur.execute(
@@ -238,4 +251,4 @@ async def upsert_device(
                 (current_ip,),
             )
         row = await cur.fetchone()
-        return _ensure_uuid(row["id"])
+        return _safe_uuid(row["id"]) or uuid4()

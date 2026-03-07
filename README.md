@@ -102,6 +102,107 @@ unetdefence-api
 
 Migrations: `python -m unetdefence.storage.migrate`
 
+## Starting the application
+
+Follow these steps in order. Use **four terminals** if you run everything (Zeek, API, Ingest, optional Ollama); or fewer if you skip Zeek/Suricata or Ollama.
+
+---
+
+### Step 1: One-time setup
+
+From the project directory:
+
+```bash
+cd /path/to/UNetDefence    # replace with your actual path
+./scripts/setup.sh
+```
+
+Then edit **`.env`** in the project root. At least set:
+
+- `UNETDEFENCE_LLM_MODEL=smollm2` (or your Ollama model) if you use the LLM.
+- **Ingest paths:** Setup already sets `UNETDEFENCE_INGEST_ZEEK_LOG_DIR` and `UNETDEFENCE_INGEST_SURICATA_EVE_PATH` to the project **`logs/zeek`** and **`logs/suricata`** dirs (created by setup, ignored by git). Only change them if you use system log paths instead.
+
+---
+
+### Step 2: Zeek & Suricata (optional – for network data)
+
+**Setup** creates **`logs/zeek`** and **`logs/suricata`** in the project and writes their paths into **`.env`**. These folders are in **`.gitignore`**, so logs stay out of the repo. The ingest worker reads from the paths in `.env`.
+
+No need to edit `.env` for log paths if you use the project log dirs (setup sets them):
+
+- `UNETDEFENCE_INGEST_ZEEK_LOG_DIR=<project>/logs/zeek`
+- `UNETDEFENCE_INGEST_SURICATA_EVE_PATH=<project>/logs/suricata/eve.json`
+
+**Start Zeek** (dedicated terminal). Zeek writes to the **current directory**, so run it from **`logs/zeek`**:
+
+```bash
+cd /path/to/UNetDefence/logs/zeek
+# One-time on macOS: allow packet capture (or use: sudo zeek -i en0)
+sudo chgrp admin /dev/bpf* && sudo chmod g+r /dev/bpf*
+zeek -i en0
+```
+
+Replace `en0` with your interface (`ifconfig` or `networksetup -listallhardwareports`). Logs (`conn.log`, `dns.log`, …) appear in `logs/zeek`.
+
+**Suricata** (optional): write logs into the project with **`-l logs/suricata`**:
+
+```bash
+cd /path/to/UNetDefence
+suricata -c /opt/homebrew/etc/suricata/suricata.yaml -i en0 -l logs/suricata
+# If config path fails: find $(brew --prefix) -name 'suricata.yaml' 2>/dev/null
+```
+
+**Linux:** use `sudo systemctl start zeek` and `sudo systemctl start suricata`; then set `.env` to `/var/log/zeek` and `/var/log/suricata/eve.json` (or run Zeek/Suricata so they write into `logs/zeek` and `logs/suricata` and keep the .env from setup).
+
+---
+
+### Step 3: Start API and Ingest
+
+**Terminal A – API**
+
+```bash
+cd /path/to/UNetDefence
+source .venv/bin/activate
+unetdefence-api
+```
+
+**Terminal B – Ingest** (reads Zeek/Suricata logs and fills the DB)
+
+```bash
+cd /path/to/UNetDefence
+source .venv/bin/activate
+unetdefence-ingest
+```
+
+---
+
+### Step 4: Optional – Ollama (for LLM questions)
+
+If you use the LLM, in another terminal:
+
+```bash
+ollama serve
+ollama run smollm2
+```
+
+---
+
+### Step 5: Check
+
+- **API docs:** open **http://localhost:8000/docs**
+- **Health:** `curl http://localhost:8000/health`
+- **Stats (ingest + DB):** `curl http://localhost:8000/health/stats`
+
+---
+
+### Overview
+
+| You want…              | Do this |
+|------------------------|--------|
+| API only               | Step 1 → Step 3 Terminal A |
+| API + network analysis | Step 1 → Step 2 (Zeek + .env) → Step 3 (API + Ingest) |
+| Full (API + data + LLM)| All steps; keep Zeek, API, Ingest (and optionally Ollama) running |
+
 ## Running on a server
 
 Use this to run the API (and optionally ingest/scheduler) on a dedicated machine so it keeps running.
@@ -160,7 +261,7 @@ Use this to run the API (and optionally ingest/scheduler) on a dedicated machine
 
 ## Configuration
 
-- **Database**: `UNETDEFENCE_DATABASE_URL` (default `sqlite:///./unetdefence.db`; use Postgres URL for production)
+- **Database**: `UNETDEFENCE_DATABASE_URL` (default `sqlite:///./unetdefence.db`; use Postgres URL for production). For SQLite, use an absolute path so API and ingest share the same file: `sqlite:////absolute/path/unetdefence.db`.
 - **LLM**: `UNETDEFENCE_LLM_PROVIDER` (e.g. `ollama`), `UNETDEFENCE_LLM_MODEL`, `UNETDEFENCE_LLM_BASE_URL` (default `http://localhost:11434`). If the API runs **in Docker** but Ollama is on the host, set `UNETDEFENCE_LLM_BASE_URL=http://host.docker.internal:11434`.
 - **Embedding**: `UNETDEFENCE_EMBEDDING_PROVIDER` (e.g. `ollama`), `UNETDEFENCE_EMBEDDING_MODEL`, `UNETDEFENCE_EMBEDDING_BASE_URL`
 - **GeoIP**: `UNETDEFENCE_GEOIP_DB_PATH` (MaxMind DB path)
@@ -176,6 +277,7 @@ See `config/README.md` and `docs/ARCHITECTURE.md` for details.
 - `GET /api/events/flows`, `GET /api/events/alerts`, `GET /api/events/router`
 - `GET /api/devices`, `GET /api/devices/{id}`, `GET /api/devices/{id}/alerts`
 - `GET /api/analytics/top-countries`, `GET /api/analytics/devices-by-country`, `GET /api/analytics/anomalies`
+- `GET /api/db/overview` – row counts per table and `database_path` (which SQLite file is used); `GET /api/db/entries?table=flows&limit=50` – browse table rows
 - `POST /api/llm/ask`, `POST /api/llm/explain-alert`
 
 OpenAPI docs: `http://localhost:8000/docs` when the API is running.
@@ -196,6 +298,21 @@ Health, events, devices, analytics and LLM (ask/explain) are checked. LLM return
 - Call **`GET /health/stats`**. It returns `ingest_configured` (whether Zeek/Suricata paths are set), and `flows_count`, `alerts_count`, `devices_count`.
 - Data comes from the **ingest worker** (`unetdefence-ingest`). If you never run it, or don’t set `UNETDEFENCE_INGEST_ZEEK_LOG_DIR` / `UNETDEFENCE_INGEST_SURICATA_EVE_PATH`, the DB stays empty and the LLM will only see “No recent data” as context.
 - After changing `.env` (e.g. `UNETDEFENCE_LLM_MODEL=smollm2`), **restart the API** so it picks up the new config.
+
+### API and Ingest: same database?
+
+API and ingest must use the **same SQLite file**, otherwise the API shows empty tables even though the ingest logs “Persisted N events”.
+
+- **Check which file is used:**  
+  - **API:** `GET /api/db/overview` returns `database_path` (absolute path to the SQLite file).  
+  - **Ingest:** At startup it logs `Database: <path>`.  
+  Both must show the **same path**.
+- By default the SQLite path is resolved to the **project root** (`<repo>/unetdefence.db`), so starting both from the project directory is enough.
+- To fix it explicitly, set in **`.env`** an absolute path (four slashes: `sqlite:///` + path):
+  ```env
+  UNETDEFENCE_DATABASE_URL=sqlite:////Users/you/Documents/github/UNetDefence/unetdefence.db
+  ```
+  Then restart **API and Ingest**.
 
 ## License
 

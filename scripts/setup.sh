@@ -93,7 +93,13 @@ fi
 fi
 echo ""
 
-# --- 3. Detect Zeek / Suricata paths if not given ---
+# --- 3. Project log dirs (logs/zeek, logs/suricata) – created so Zeek/Suricata can write here ---
+LOGS_ZEEK="$REPO_ROOT/logs/zeek"
+LOGS_SURICATA="$REPO_ROOT/logs/suricata"
+mkdir -p "$LOGS_ZEEK" "$LOGS_SURICATA"
+echo "Created log dirs: logs/zeek, logs/suricata (see .gitignore)"
+
+# --- 4. Detect Zeek / Suricata paths if not given ---
 if [ -z "$ZEEK_DIR" ]; then
   for d in /var/log/zeek /var/log/bro /usr/local/var/log/zeek /opt/zeek/logs "$HOME/zeek/logs" "$HOME/logs/zeek"; do
     if [ -n "$d" ] && [ -f "${d}/conn.log" ]; then
@@ -102,22 +108,11 @@ if [ -z "$ZEEK_DIR" ]; then
       break
     fi
   done
-  # Default paths after install (logs appear after first run of Zeek)
-  if [ -z "$ZEEK_DIR" ] && command -v zeek &>/dev/null; then
-    if [ "$(uname -s)" = "Darwin" ]; then
-      if [ -d "/opt/homebrew/var/log/zeek" ]; then ZEEK_DIR="/opt/homebrew/var/log/zeek"
-      elif [ -d "/usr/local/var/log/zeek" ]; then ZEEK_DIR="/usr/local/var/log/zeek"
-      else
-        ZEEK_DIR="/opt/homebrew/var/log/zeek"; [ ! -d "$ZEEK_DIR" ] && ZEEK_DIR="/usr/local/var/log/zeek"
-        echo "Zeek installed; using default log dir $ZEEK_DIR (create with: sudo mkdir -p $ZEEK_DIR && sudo chown \$USER $ZEEK_DIR)"
-      fi
-    else
-      ZEEK_DIR="/var/log/zeek"
-      echo "Zeek installed; using default log dir $ZEEK_DIR"
-    fi
-    [ -n "$ZEEK_DIR" ] && echo "Zeek log dir (default): $ZEEK_DIR"
+  # Prefer project log dir so logs stay in repo (ignored by git)
+  if [ -z "$ZEEK_DIR" ]; then
+    ZEEK_DIR="$LOGS_ZEEK"
+    echo "Zeek log dir (project): $ZEEK_DIR – run Zeek from here: cd logs/zeek && zeek -i en0"
   fi
-  [ -z "$ZEEK_DIR" ] && echo "Zeek: no log dir found (set later with --zeek-dir or in .env)"
 fi
 
 if [ -z "$SURICATA_PATH" ]; then
@@ -128,20 +123,14 @@ if [ -z "$SURICATA_PATH" ]; then
       break
     fi
   done
-  # Default path after install (eve.json created when Suricata runs)
-  if [ -z "$SURICATA_PATH" ] && command -v suricata &>/dev/null; then
-    if [ "$(uname -s)" = "Darwin" ]; then
-      [ -d /opt/homebrew ] && SURICATA_PATH="/opt/homebrew/var/log/suricata/eve.json" || SURICATA_PATH="/usr/local/var/log/suricata/eve.json"
-    else
-      SURICATA_PATH="/var/log/suricata/eve.json"
-    fi
-    echo "Suricata installed; using default eve.json path: $SURICATA_PATH"
+  if [ -z "$SURICATA_PATH" ]; then
+    SURICATA_PATH="$LOGS_SURICATA/eve.json"
+    echo "Suricata eve path (project): $SURICATA_PATH – run Suricata with -l logs/suricata"
   fi
-  [ -z "$SURICATA_PATH" ] && echo "Suricata: no eve.json found (set later with --suricata-path or in .env)"
 fi
 echo ""
 
-# --- 3. Update .env (keep existing vars, set ingest) ---
+# --- 5. Update .env (keep existing vars, set ingest) ---
 ENV_FILE="$REPO_ROOT/.env"
 touch "$ENV_FILE"
 TMP="$(mktemp)"
@@ -160,12 +149,12 @@ fi
 mv "$TMP" "$ENV_FILE"
 echo ""
 
-# --- 4. Migrate DB ---
+# --- 6. Migrate DB ---
 echo "Running DB migrations..."
 python -m unetdefence.storage.migrate
 echo ""
 
-# --- 5. Ollama: check/pull configured LLM (and optional embedding) model ---
+# --- 7. Ollama: check/pull configured LLM (and optional embedding) model ---
 echo "Checking Ollama models (from .env / config)..."
 if unetdefence-ensure-ollama; then
   echo "  Ollama models OK."

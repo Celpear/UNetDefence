@@ -14,7 +14,7 @@ except Exception:
     pass
 from fastapi.middleware.cors import CORSMiddleware
 
-from unetdefence.api.routes import devices, events, analytics, llm as llm_routes, health
+from unetdefence.api.routes import devices, events, analytics, llm as llm_routes, health, db as db_routes
 from unetdefence.storage import init_pool, close_pool
 
 
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
     app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
     app.include_router(llm_routes.router, prefix="/api/llm", tags=["llm"])
+    app.include_router(db_routes.router, prefix="/api/db", tags=["db"])
     return app
 
 

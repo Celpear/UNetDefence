@@ -1,9 +1,13 @@
 """Database connection: PostgreSQL (pool) or SQLite (default, no server)."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from unetdefence.config import get_settings
+
+# Project root (connection.py -> storage -> unetdefence -> src -> project)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 def _is_sqlite() -> bool:
@@ -91,6 +95,10 @@ class _SqliteConnectionWrapper:
     def cursor(self, row_factory: Any = None) -> "_SqliteCursorWrapper":
         return _SqliteCursorWrapper(self._conn)
 
+    async def commit(self) -> None:
+        """Commit the current transaction (required for aiosqlite; no auto-commit)."""
+        await self._conn.commit()
+
     async def __aenter__(self) -> "_SqliteConnectionWrapper":
         return self
 
@@ -129,6 +137,9 @@ async def _init_sqlite() -> None:
     path = url.replace("sqlite:///", "").strip()
     if not path:
         path = "./unetdefence.db"
+    # Use absolute path so API and ingest use the same file regardless of cwd
+    if not Path(path).is_absolute():
+        path = str((_PROJECT_ROOT / path).resolve())
     _sqlite_pool = _SqlitePool(path)
 
 
@@ -166,6 +177,13 @@ def get_pool() -> Any:
     if _pg_pool is None:
         raise RuntimeError("Connection pool not initialized; call init_pool() first")
     return _pg_pool
+
+
+def get_sqlite_path() -> str | None:
+    """Return the absolute path of the SQLite DB file when using SQLite; else None."""
+    if not _is_sqlite() or _sqlite_pool is None:
+        return None
+    return getattr(_sqlite_pool, "_path", None)
 
 
 @asynccontextmanager

@@ -6,6 +6,14 @@ import logging
 import sys
 from pathlib import Path
 
+# Load .env from project root so UNETDEFENCE_INGEST_* are applied regardless of cwd
+try:
+    from dotenv import load_dotenv
+    _root = Path(__file__).resolve().parent.parent.parent.parent  # ingest -> unetdefence -> src -> project
+    load_dotenv(_root / ".env")
+except Exception:
+    pass
+
 from unetdefence.config import get_settings
 from unetdefence.ingest.parsers import (
     parse_zeek_conn,
@@ -15,7 +23,7 @@ from unetdefence.ingest.parsers import (
     parse_suricata_event,
 )
 from unetdefence.models import FlowEvent, DnsEvent, HttpEvent, TlsEvent, AlertEvent, RouterEvent
-from unetdefence.storage import get_pool, init_pool, close_pool
+from unetdefence.storage import get_pool, get_sqlite_path, init_pool, close_pool
 from unetdefence.storage.repositories import (
     insert_flow,
     insert_dns,
@@ -142,6 +150,8 @@ async def _persist_batch(batch: list) -> int:
                     count += 1
             except Exception as e:
                 logger.warning("Insert failed for event: %s", e)
+        if count and hasattr(conn, "commit"):
+            await conn.commit()
     return count
 
 
@@ -155,6 +165,9 @@ async def run_ingest_loop() -> None:
     poll_interval = ingest.poll_interval_seconds
 
     await init_pool()
+    db_path = get_sqlite_path()
+    if db_path:
+        logger.info("Database: %s", db_path)
     if not zeek_dir and not suricata_path:
         logger.warning(
             "No ingest sources configured. Set UNETDEFENCE_INGEST_ZEEK_LOG_DIR and/or "

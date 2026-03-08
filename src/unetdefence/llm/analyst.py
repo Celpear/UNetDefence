@@ -10,8 +10,8 @@ class LLMAnalyst(ABC):
     """Abstract LLM provider for analyst layer."""
 
     @abstractmethod
-    async def generate_answer(self, question: str, context: str) -> str:
-        """Answer a natural-language question given retrieved context."""
+    async def generate_answer(self, question: str, context: str) -> tuple[str, str]:
+        """Answer a natural-language question given retrieved context. Returns (answer, full_prompt)."""
         pass
 
     @abstractmethod
@@ -28,8 +28,10 @@ class LLMAnalyst(ABC):
 class DisabledLLMAnalyst(LLMAnalyst):
     """No-op when LLM is disabled."""
 
-    async def generate_answer(self, question: str, context: str) -> str:
-        return "LLM is disabled. Enable a provider in configuration to get natural-language answers."
+    async def generate_answer(self, question: str, context: str) -> tuple[str, str]:
+        msg = "LLM is disabled. Enable a provider in configuration to get natural-language answers."
+        full = f"[system: analyst with context]\n\nContext:\n{context}\n\nQuestion: {question}"
+        return msg, full
 
     async def explain_alert(self, alert_summary: str, related_context: str) -> str:
         return "LLM is disabled. Enable a provider to get explanations."
@@ -66,6 +68,28 @@ class OpenAICompatibleAnalyst(LLMAnalyst):
             r.raise_for_status()
             data = r.json()
             return data["choices"][0]["message"]["content"].strip()
+
+    async def generate_answer(self, question: str, context: str) -> tuple[str, str]:
+        system = (
+            "You are a network security analyst. Answer the user's question based only on the provided context. "
+            "Cite data from the context. If the context does not contain enough information, say so."
+        )
+        user_content = f"Context:\n{context}\n\nQuestion: {question}"
+        full_prompt = f"[System]\n{system}\n\n[User]\n{user_content}"
+        answer = await self._chat(system, user_content)
+        return answer, full_prompt
+
+    async def explain_alert(self, alert_summary: str, related_context: str) -> str:
+        return await self._chat(
+            "You are a security analyst. Explain why this alert might be suspicious. Be concise.",
+            f"Alert: {alert_summary}\n\nRelated context:\n{related_context}",
+        )
+
+    async def summarize_events(self, events_summary: str) -> str:
+        return await self._chat(
+            "Summarize the following security/network events in 2–4 sentences. Be factual and concise.",
+            events_summary,
+        )
 
 
 class OllamaAnalyst(LLMAnalyst):
@@ -106,12 +130,15 @@ class OllamaAnalyst(LLMAnalyst):
             r.raise_for_status()
             return ""
 
-    async def generate_answer(self, question: str, context: str) -> str:
+    async def generate_answer(self, question: str, context: str) -> tuple[str, str]:
         system = (
             "You are a network security analyst. Answer the user's question based only on the provided context. "
             "Cite data from the context. If the context does not contain enough information, say so."
         )
-        return await self._chat(system, f"Context:\n{context}\n\nQuestion: {question}")
+        user_content = f"Context:\n{context}\n\nQuestion: {question}"
+        full_prompt = f"[System]\n{system}\n\n[User]\n{user_content}"
+        answer = await self._chat(system, user_content)
+        return answer, full_prompt
 
     async def explain_alert(self, alert_summary: str, related_context: str) -> str:
         system = (

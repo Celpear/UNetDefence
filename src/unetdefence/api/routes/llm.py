@@ -19,6 +19,7 @@ class QuestionRequest(BaseModel):
 
 class QuestionResponse(BaseModel):
     answer: str
+    full_prompt: str | None = None
 
 
 class ExplainAlertRequest(BaseModel):
@@ -51,7 +52,7 @@ async def ask_question(req: QuestionRequest) -> QuestionResponse:
     context = "\n".join(context_parts) or "No recent data."
     try:
         analyst = get_llm_analyst()
-        answer = await analyst.generate_answer(req.question, context)
+        answer, full_prompt = await analyst.generate_answer(req.question, context)
     except HTTPException:
         raise
     except Exception as e:
@@ -59,7 +60,7 @@ async def ask_question(req: QuestionRequest) -> QuestionResponse:
         if "404" in str(e) or "Connection" in str(e):
             detail += " If the API runs in Docker, set UNETDEFENCE_LLM_BASE_URL=http://host.docker.internal:11434 to reach Ollama on the host."
         raise HTTPException(status_code=503, detail=detail)
-    return QuestionResponse(answer=answer)
+    return QuestionResponse(answer=answer, full_prompt=full_prompt)
 
 
 @router.post("/explain-alert", response_model=ExplainAlertResponse)

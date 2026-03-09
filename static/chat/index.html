@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>UNetDefence – LLM Analyst</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --bg-elevated: #020617;
+        --card: #020617;
+        --card-inner: #020617;
+        --border-subtle: rgba(148, 163, 184, 0.24);
+        --accent: #22c55e;
+        --accent-soft: rgba(34, 197, 94, 0.16);
+        --accent-strong: rgba(34, 197, 94, 0.3);
+        --text-primary: #e5e7eb;
+        --text-secondary: #9ca3af;
+        --text-muted: #6b7280;
+        --danger: #ef4444;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
+        color: var(--text-primary);
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+        padding: 16px;
+      }
+      .shell {
+        width: 100%;
+        max-width: 1120px;
+        display: flex;
+        flex-direction: column;
+        border-radius: 24px;
+        border: 1px solid var(--border-subtle);
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.98));
+        box-shadow:
+          0 24px 60px rgba(15, 23, 42, 0.7),
+          0 0 0 1px rgba(15, 23, 42, 0.9);
+        overflow: hidden;
+      }
+      header {
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+        background: radial-gradient(circle at 0 0, rgba(34, 197, 94, 0.12), transparent 55%);
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .logo-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 30% 0, #bbf7d0 0, #22c55e 30%, #16a34a 65%, #064e3b 100%);
+        position: relative;
+        box-shadow:
+          0 0 30px rgba(34, 197, 94, 0.6),
+          0 0 0 1px rgba(15, 23, 42, 0.9);
+      }
+      .logo-mark::after {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border-radius: inherit;
+        border: 2px solid rgba(15, 23, 42, 0.9);
+        box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.8);
+      }
+      .logo-text-main {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .logo-text-sub {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--accent);
+      }
+      .chip {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        color: var(--text-secondary);
+        background: radial-gradient(circle at 0 0, rgba(148, 163, 184, 0.2), transparent 60%);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .chip-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.9);
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1.4fr);
+        gap: 1px;
+        flex: 1;
+        min-height: 0;
+        border-top: 1px solid rgba(15, 23, 42, 0.8);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.95));
+      }
+      @media (max-width: 880px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+          grid-auto-rows: auto;
+        }
+      }
+      .pane {
+        padding: 16px 18px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .pane + .pane {
+        border-left: 1px solid rgba(15, 23, 42, 0.9);
+      }
+      .pane-title {
+        font-size: 13px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pane-title span.badge {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        color: var(--text-secondary);
+      }
+      .messages {
+        flex: 1;
+        min-height: 0;
+        border-radius: 14px;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+        padding: 12px;
+        overflow-y: auto;
+      }
+      .msg {
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.5;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+      }
+      .msg-user {
+        background: radial-gradient(circle at top right, rgba(34, 197, 94, 0.3), rgba(15, 23, 42, 0.9));
+        align-self: flex-end;
+      }
+      .msg-assistant {
+        background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), #020617);
+      }
+      .msg-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .msg-code {
+        margin-top: 8px;
+        font-size: 11px;
+        padding: 8px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        white-space: pre-wrap;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .fieldset {
+        border-radius: 14px;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        background: radial-gradient(circle at top, #020617, rgba(15, 23, 42, 0.95));
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .fieldset legend {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      input[type="number"],
+      select {
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 999px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        color: var(--text-primary);
+        font-size: 12px;
+        padding: 4px 10px;
+        outline: none;
+      }
+      input[type="number"]:focus,
+      select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
+      }
+      .checkbox-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .checkbox-row label {
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        cursor: pointer;
+        user-select: none;
+      }
+      .checkbox-row input {
+        accent-color: var(--accent);
+      }
+      textarea {
+        width: 100%;
+        min-height: 70px;
+        max-height: 140px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        background: rgba(15, 23, 42, 0.95);
+        color: var(--text-primary);
+        font-size: 13px;
+        padding: 9px 10px;
+        outline: none;
+      }
+      textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
+      }
+      .composer-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      button {
+        font-family: inherit;
+      }
+      .btn-primary {
+        border: none;
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: 13px;
+        font-weight: 500;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #020617;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow:
+          0 10px 30px rgba(34, 197, 94, 0.35),
+          0 0 0 1px rgba(22, 163, 74, 0.8);
+      }
+      .btn-primary[disabled] {
+        opacity: 0.6;
+        cursor: default;
+        box-shadow: none;
+      }
+      .btn-secondary {
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .btn-secondary:hover {
+        border-color: rgba(148, 163, 184, 0.9);
+      }
+      .muted {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .loading-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .loading-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--accent);
+        opacity: 0.4;
+        animation: loading-bounce 1s infinite ease-in-out alternate;
+      }
+      .loading-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      .loading-dot:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .loading-dot:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      @keyframes loading-bounce {
+        from {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        to {
+          transform: translateY(-4px);
+          opacity: 1;
+        }
+      }
+      .error {
+        font-size: 12px;
+        color: var(--danger);
+      }
+      footer {
+        padding: 8px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--text-muted);
+        background: radial-gradient(circle at bottom, rgba(15, 23, 42, 0.9), #020617);
+      }
+      .tab-bar {
+        display: flex;
+        gap: 8px;
+        padding: 8px 18px 4px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), transparent 60%);
+      }
+      .tab {
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tab-active {
+        border-color: rgba(34, 197, 94, 0.9);
+        color: var(--accent);
+        box-shadow:
+          0 0 0 1px rgba(34, 197, 94, 0.6),
+          0 10px 30px rgba(15, 23, 42, 0.8);
+        background: radial-gradient(circle at top, rgba(34, 197, 94, 0.3), rgba(15, 23, 42, 1));
+      }
+      .dashboard-main {
+        padding: 12px 18px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-top: 1px solid rgba(15, 23, 42, 0.9);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.8), #020617);
+      }
+      .dash-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      @media (max-width: 960px) {
+        .dash-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 720px) {
+        .dash-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .dash-card {
+        border-radius: 14px;
+        border: 1px solid rgba(31, 41, 55, 0.95);
+        background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), #020617);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .dash-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .dash-card-title {
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .dash-pill {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        color: var(--text-secondary);
+      }
+      .dash-kpi {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .dash-list {
+        list-style: none;
+        padding: 0;
+        margin: 4px 0 0;
+        font-size: 12px;
+        max-height: 160px;
+        overflow: auto;
+      }
+      .dash-list li {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        border-bottom: 1px dashed rgba(31, 41, 55, 0.8);
+      }
+      .dash-list li span.key {
+        color: var(--text-secondary);
+      }
+      .dash-list li span.val {
+        color: var(--text-primary);
+      }
+      .dash-error {
+        font-size: 11px;
+        color: var(--danger);
+      }
+      .dash-loading {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="shell">
+      <header>
+        <div class="logo">
+          <div class="logo-mark"></div>
+          <div>
+            <div class="logo-text-main">UNetDefence</div>
+            <div class="logo-text-sub">Local network analyst</div>
+          </div>
+        </div>
+        <div class="chip">
+          <span class="chip-dot"></span>
+          <span>LLM Analyst</span>
+        </div>
+      </header>
+      <div class="tab-bar">
+        <button
+          class="tab"
+          :class="state.activeTab === 'chat' ? 'tab-active' : ''"
+          @click="state.activeTab = 'chat'"
+        >
+          Chat
+        </button>
+        <button
+          class="tab"
+          :class="state.activeTab === 'dashboard' ? 'tab-active' : ''"
+          @click="setTabDashboard"
+        >
+          Dashboard
+        </button>
+      </div>
+      <main v-if="state.activeTab === 'chat'">
+        <section class="pane">
+          <div class="pane-title">
+            Conversation
+            <span class="badge" v-if="state.llmModel">Model: {{ state.llmModel }}</span>
+          </div>
+          <div class="messages" ref="messagesEl">
+            <div v-if="state.messages.length === 0" class="muted">
+              Ask the analyst something like:
+              <br />“Which destinations are unusual in the last 2 hours?” or “Are there suspicious TLS‑SNI domains?”
+            </div>
+            <div
+              v-for="(m, idx) in state.messages"
+              :key="idx"
+              class="msg"
+              :class="m.role === 'user' ? 'msg-user' : 'msg-assistant'"
+            >
+              <div class="msg-meta">
+                <span>{{ m.role === 'user' ? 'You' : 'Analyst' }}</span>
+                <span v-if="m.meta">{{ m.meta }}</span>
+              </div>
+              <div>{{ m.text }}</div>
+              <details v-if="m.fullPrompt" class="msg-code">
+                <summary>Full prompt</summary>
+                <pre>{{ m.fullPrompt }}</pre>
+              </details>
+            </div>
+          </div>
+          <div class="controls">
+            <div class="fieldset">
+              <legend>Question</legend>
+              <textarea
+                v-model="state.question"
+                :placeholder="state.loading ? 'Waiting for response…' : 'Question for the analyst…'"
+                :disabled="state.loading"
+                @keydown.enter.prevent="maybeSend"
+              ></textarea>
+              <div class="composer-row">
+                <button class="btn-primary" @click="send" :disabled="!canSend">
+                  <span v-if="state.loading">Analyzing…</span>
+                  <span v-else>Send question</span>
+                </button>
+                <button class="btn-secondary" type="button" @click="clearChat" v-if="state.messages.length">
+                  Clear history
+                </button>
+                <span class="muted" v-if="!state.loading">
+                  Press Enter to send, Shift+Enter for newline
+                </span>
+              </div>
+              <div v-if="state.loading" class="loading-indicator">
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span>Analyzing network context…</span>
+              </div>
+              <div class="error" v-if="state.error">{{ state.error }}</div>
+            </div>
+          </div>
+        </section>
+        <section class="pane">
+          <div class="pane-title">Context Controls</div>
+          <div class="controls">
+            <div class="fieldset">
+              <legend>Language</legend>
+              <div class="row">
+                <label>
+                  Answer language
+                  <select v-model="state.language">
+                    <option value="">Auto (model decides)</option>
+                    <option value="English">English</option>
+                    <option value="German">German</option>
+                    <option value="French">Français</option>
+                    <option value="Spanish">Español</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="fieldset">
+              <legend>Time window</legend>
+              <div class="row">
+                <label>
+                  Last hours
+                  <input type="number" v-model.number="state.sinceHours" min="1" max="720" />
+                </label>
+                <span class="muted">Used for domains, TLS‑SNI, IPs</span>
+              </div>
+            </div>
+            <div class="fieldset">
+              <legend>Context: include</legend>
+              <div class="checkbox-row">
+                <label>
+                  <input type="checkbox" v-model="state.includeDomains" />
+                  Domains (DNS, HTTP, TLS‑SNI)
+                </label>
+                <label>
+                  <input type="checkbox" v-model="state.includeTlsSni" />
+                  TLS‑SNI only
+                </label>
+                <label>
+                  <input type="checkbox" v-model="state.includeDstIps" />
+                  Destination IPs
+                </label>
+              </div>
+              <p class="muted">
+                These toggles control which aggregated data (domains, TLS‑SNI, IPs) is added to the LLM context.
+              </p>
+            </div>
+            <div class="fieldset">
+              <legend>Tips</legend>
+              <ul class="muted">
+                <li>Use clear windows (“last 2 hours”, “today”).</li>
+                <li>Questions like “Show me suspicious domains” work well with Domains/TLS‑SNI enabled.</li>
+                <li>You can ask in any language; the answer language is controlled above.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+      <main v-else class="dashboard-main">
+        <div class="pane-title">
+          Overview
+          <span class="badge">Live data</span>
+        </div>
+        <div v-if="state.dash.loading" class="dash-loading">
+          Loading dashboard…
+        </div>
+        <div v-if="state.dash.error" class="dash-error">
+          {{ state.dash.error }}
+        </div>
+        <div v-if="!state.dash.loading" class="dash-grid">
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">Database</span>
+              <span class="dash-pill">Counts</span>
+            </div>
+            <div class="dash-kpi">
+              {{ (state.dash.dbOverview?.tables?.flows || 0) }} flows
+            </div>
+            <ul class="dash-list">
+              <li>
+                <span class="key">Alerts</span>
+                <span class="val">{{ state.dash.dbOverview?.tables?.alerts || 0 }}</span>
+              </li>
+              <li>
+                <span class="key">Devices</span>
+                <span class="val">{{ state.dash.dbOverview?.tables?.devices || 0 }}</span>
+              </li>
+              <li>
+                <span class="key">DNS events</span>
+                <span class="val">{{ state.dash.dbOverview?.tables?.dns_events || 0 }}</span>
+              </li>
+              <li>
+                <span class="key">HTTP events</span>
+                <span class="val">{{ state.dash.dbOverview?.tables?.http_events || 0 }}</span>
+              </li>
+              <li>
+                <span class="key">TLS events</span>
+                <span class="val">{{ state.dash.dbOverview?.tables?.tls_events || 0 }}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">Top countries</span>
+              <span class="dash-pill">24h</span>
+            </div>
+            <ul class="dash-list">
+              <li v-for="c in state.dash.topCountries" :key="c.country_code">
+                <span class="key">{{ c.country_code }}</span>
+                <span class="val">{{ c.flow_count }}</span>
+              </li>
+              <li v-if="!state.dash.topCountries?.length" class="muted">
+                No data yet.
+              </li>
+            </ul>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">TLS SNI</span>
+              <span class="dash-pill">last 24h</span>
+            </div>
+            <ul class="dash-list">
+              <li v-for="s in state.dash.tlsSni" :key="s.sni">
+                <span class="key">{{ s.sni }}</span>
+                <span class="val">{{ s.tls_count }}</span>
+              </li>
+              <li v-if="!state.dash.tlsSni?.length" class="muted">
+                No TLS events yet.
+              </li>
+            </ul>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">Domains</span>
+              <span class="dash-pill">last 24h</span>
+            </div>
+            <ul class="dash-list">
+              <li v-for="d in state.dash.domains" :key="d.domain">
+                <span class="key">{{ d.domain }}</span>
+                <span class="val">{{ d.cnt }}</span>
+              </li>
+              <li v-if="!state.dash.domains?.length" class="muted">
+                No domains yet.
+              </li>
+            </ul>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">Destination IPs</span>
+              <span class="dash-pill">last 24h</span>
+            </div>
+            <ul class="dash-list">
+              <li v-for="ip in state.dash.dstIps" :key="ip.ip">
+                <span class="key">{{ ip.ip }}</span>
+                <span class="val">{{ ip.flow_count }}</span>
+              </li>
+              <li v-if="!state.dash.dstIps?.length" class="muted">
+                No flows yet.
+              </li>
+            </ul>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <span class="dash-card-title">Anomalies</span>
+              <span class="dash-pill">baselines</span>
+            </div>
+            <ul class="dash-list">
+              <li v-for="(a, idx) in state.dash.anomalies" :key="idx">
+                <span class="key">{{ a.device_id || 'n/a' }}</span>
+                <span class="val">{{ a.metric_name }}={{ a.metric_value }}</span>
+              </li>
+              <li v-if="!state.dash.anomalies?.length" class="muted">
+                No anomalies flagged yet.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </main>
+      <footer>
+        <span>UNetDefence LLM Analyst UI</span>
+        <span v-if="state.lastStatus" class="muted">{{ state.lastStatus }}</span>
+      </footer>
+    </div>
+    <script>
+      const { createApp, onMounted, ref, watch } = Vue;
+
+      createApp({
+        setup() {
+          const state = Vue.reactive({
+            activeTab: "chat",
+            question: "",
+            sinceHours: 24,
+            includeDomains: false,
+            includeTlsSni: false,
+            includeDstIps: false,
+            language: "English",
+            messages: [],
+            loading: false,
+            error: "",
+            lastStatus: "",
+            llmModel: null,
+            dash: {
+              loading: false,
+              error: "",
+              dbOverview: null,
+              topCountries: [],
+              tlsSni: [],
+              domains: [],
+              dstIps: [],
+              anomalies: [],
+            },
+          });
+
+          const messagesEl = ref(null);
+
+          const scrollToBottom = () => {
+            if (messagesEl.value) {
+              requestAnimationFrame(() => {
+                messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+              });
+            }
+          };
+
+          const canSend = Vue.computed(
+            () => !state.loading && state.question.trim().length > 0
+          );
+
+          const clearChat = () => {
+            state.messages = [];
+            state.error = "";
+            state.lastStatus = "";
+          };
+
+          const maybeSend = (e) => {
+            if (e.shiftKey) {
+              // allow newline
+              state.question += "\n";
+              return;
+            }
+            if (canSend.value) {
+              send();
+            }
+          };
+
+          const send = async () => {
+            if (!canSend.value) return;
+            const q = state.question.trim();
+            state.error = "";
+            state.loading = true;
+            state.lastStatus = "Sending request…";
+
+            state.messages.push({
+              role: "user",
+              text: q,
+              meta: `since=${state.sinceHours}h, domains=${state.includeDomains ? "✓" : "–"}, tls-sni=${state.includeTlsSni ? "✓" : "–"}, dst-ips=${state.includeDstIps ? "✓" : "–"}, lang=${state.language || "auto"}`,
+            });
+            scrollToBottom();
+            state.question = "";
+
+            try {
+              const body = {
+                question: q,
+                since_hours: state.sinceHours || null,
+                include_domains: state.includeDomains,
+                include_tls_sni: state.includeTlsSni,
+                include_dst_ips: state.includeDstIps,
+                language: state.language || null,
+              };
+              const res = await fetch("/api/llm/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify(body),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                throw new Error(data.detail || res.statusText);
+              }
+              state.llmModel = data.llm_model || state.llmModel;
+              state.messages.push({
+                role: "assistant",
+                text: data.answer || "",
+                fullPrompt: data.full_prompt || "",
+                meta: data.llm_model ? `Model: ${data.llm_model}` : "",
+              });
+              state.lastStatus = "OK";
+              scrollToBottom();
+            } catch (err) {
+              console.error(err);
+              state.error = String(err.message || err);
+              state.lastStatus = "Error";
+            } finally {
+              state.loading = false;
+            }
+          };
+
+          onMounted(scrollToBottom);
+
+          const loadDashboard = async () => {
+            state.dash.loading = true;
+            state.dash.error = "";
+            try {
+              const [dbRes, countriesRes, tlsRes, domainsRes, ipsRes, anomRes] = await Promise.all([
+                fetch("/api/db/overview"),
+                fetch("/api/analytics/top-countries?since_hours=24&limit=5"),
+                fetch("/api/analytics/tls-sni?since_hours=24&limit=10"),
+                fetch("/api/analytics/domains?since_hours=24&limit=10"),
+                fetch("/api/analytics/dst-ips?since_hours=24&limit=10"),
+                fetch("/api/analytics/anomalies?since_days=7"),
+              ]);
+              const [db, countries, tls, domains, ips, anomalies] = await Promise.all([
+                dbRes.json(),
+                countriesRes.json(),
+                tlsRes.json(),
+                domainsRes.json(),
+                ipsRes.json(),
+                anomRes.json(),
+              ]);
+              state.dash.dbOverview = db || null;
+              state.dash.topCountries = countries.countries || [];
+              state.dash.tlsSni = tls.sni || [];
+              state.dash.domains = domains.domains || [];
+              state.dash.dstIps = ips.ips || [];
+              state.dash.anomalies = anomalies.anomalies || [];
+            } catch (err) {
+              console.error(err);
+              state.dash.error = String(err.message || err);
+            } finally {
+              state.dash.loading = false;
+            }
+          };
+
+          const setTabDashboard = () => {
+            state.activeTab = "dashboard";
+          };
+
+          watch(
+            () => state.activeTab,
+            (tab) => {
+              if (tab === "dashboard" && !state.dash.dbOverview && !state.dash.loading) {
+                loadDashboard();
+              }
+            }
+          );
+
+          return {
+            state,
+            messagesEl,
+            canSend,
+            send,
+            maybeSend,
+            clearChat,
+            setTabDashboard,
+          };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+  </html>
+

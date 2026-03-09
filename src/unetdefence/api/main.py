@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 # Load .env from project root so UNETDEFENCE_* overrides apply (e.g. LLM_MODEL)
 try:
@@ -39,6 +40,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Root: Vue.js chat frontend
+    @app.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        html_path = _root / "static" / "chat" / "index.html"
+        if html_path.exists():
+            return HTMLResponse(html_path.read_text(encoding="utf-8"))
+        return HTMLResponse("<h1>UNetDefence</h1><p>Frontend not found. Did you pull the latest code?</p>")
     app.include_router(health.router, prefix="/health", tags=["health"])
     app.include_router(events.router, prefix="/api/events", tags=["events"])
     app.include_router(devices.router, prefix="/api/devices", tags=["devices"])

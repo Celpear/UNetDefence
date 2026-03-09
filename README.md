@@ -277,8 +277,24 @@ See `config/README.md` and `docs/ARCHITECTURE.md` for details.
 - `GET /api/events/flows`, `GET /api/events/alerts`, `GET /api/events/router`
 - `GET /api/devices`, `GET /api/devices/{id}`, `GET /api/devices/{id}/alerts`
 - `GET /api/analytics/top-countries`, `GET /api/analytics/devices-by-country`, `GET /api/analytics/anomalies`
+- `GET /api/analytics/tls-sni`, `GET /api/analytics/domains`, `GET /api/analytics/dst-ips`
 - `GET /api/db/overview` – row counts per table and `database_path` (which SQLite file is used); `GET /api/db/entries?table=flows&limit=50` – browse table rows
 - `POST /api/llm/ask`, `POST /api/llm/explain-alert`
+
+`POST /api/llm/ask` request body (simplified):
+
+```json
+{
+  "question": "Welche Daten hast du?",
+  "since_hours": 2,
+  "include_domains": true,
+  "include_tls_sni": true,
+  "include_dst_ips": false,
+  "language": "German"
+}
+```
+
+Response includes `answer`, `full_prompt` (full system+user prompt sent to the LLM) and `llm_model` (e.g. `smollm2`).
 
 OpenAPI docs: `http://localhost:8000/docs` when the API is running.
 

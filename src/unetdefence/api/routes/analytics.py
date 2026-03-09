@@ -97,3 +97,89 @@ async def list_anomalies(
             await cur.execute(sql, params)
             rows = await cur.fetchall()
     return {"anomalies": [dict(r) for r in rows]}
+
+
+@router.get("/tls-sni")
+async def tls_sni(
+    since_hours: int = Query(24, ge=1, le=720),
+    limit: int = Query(200, ge=1, le=2000),
+) -> dict:
+    """Distinct TLS SNI names observed (from tls_events)."""
+    pool = get_pool()
+    since = _utc_now() - timedelta(hours=since_hours)
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                SELECT sni, COUNT(*) AS tls_count
+                FROM tls_events
+                WHERE ts >= %s AND sni IS NOT NULL AND sni != ''
+                GROUP BY sni
+                ORDER BY tls_count DESC, sni
+                LIMIT %s
+                """,
+                (since, limit),
+            )
+            rows = await cur.fetchall()
+    return {"since_hours": since_hours, "sni": [dict(r) for r in rows]}
+
+
+@router.get("/domains")
+async def domains(
+    since_hours: int = Query(24, ge=1, le=720),
+    limit: int = Query(500, ge=1, le=5000),
+) -> dict:
+    """Combined set of domains from DNS queries, HTTP hosts and TLS SNI."""
+    pool = get_pool()
+    since = _utc_now() - timedelta(hours=since_hours)
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                SELECT domain, COUNT(*) AS cnt
+                FROM (
+                    SELECT query AS domain
+                    FROM dns_events
+                    WHERE ts >= %s AND query IS NOT NULL AND query != ''
+                    UNION ALL
+                    SELECT host AS domain
+                    FROM http_events
+                    WHERE ts >= %s AND host IS NOT NULL AND host != ''
+                    UNION ALL
+                    SELECT sni AS domain
+                    FROM tls_events
+                    WHERE ts >= %s AND sni IS NOT NULL AND sni != ''
+                ) d
+                GROUP BY domain
+                ORDER BY cnt DESC, domain
+                LIMIT %s
+                """,
+                (since, since, since, limit),
+            )
+            rows = await cur.fetchall()
+    return {"since_hours": since_hours, "domains": [dict(r) for r in rows]}
+
+
+@router.get("/dst-ips")
+async def dst_ips(
+    since_hours: int = Query(24, ge=1, le=720),
+    limit: int = Query(500, ge=1, le=5000),
+) -> dict:
+    """Destination IPs from flows with counts."""
+    pool = get_pool()
+    since = _utc_now() - timedelta(hours=since_hours)
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                SELECT dst_ip AS ip, COUNT(*) AS flow_count
+                FROM flows
+                WHERE ts >= %s
+                GROUP BY dst_ip
+                ORDER BY flow_count DESC, ip
+                LIMIT %s
+                """,
+                (since, limit),
+            )
+            rows = await cur.fetchall()
+    return {"since_hours": since_hours, "ips": [dict(r) for r in rows]}
